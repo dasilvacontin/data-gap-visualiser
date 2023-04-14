@@ -1,0 +1,122 @@
+<html>
+<head>
+	<title>Data gap visualiser</title>
+  <style>
+    td.gap {
+      background: #FFCCDE;
+    }
+    td.not-a-gap {
+      background: #599D61;
+    }
+
+    table td, table th {
+      width: 8px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      max-width: 8px;
+      font-size: 8px;
+      text-align: left;
+    }
+    table td:nth-child(1), table th:nth-child(1) {
+      width: auto;
+      max-width: none;
+      white-space: nowrap;
+      font-size: 16px;
+      padding-right: 16px;
+    }
+    table {
+      border-spacing: 1px;
+    }
+  </style>
+</head>
+<body>
+<h1>Data gap visualiser</h1>
+<form>
+  <input type="file" id="fileInput">
+  <button type="submit">Generate Tables</button>
+</form>
+
+<div id="tables"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.4/d3.min.js"></script>
+<script>
+// Get references to the form and tables div
+const form = document.querySelector('form');
+const tablesDiv = document.querySelector('#tables');
+
+// Handle form submission
+form.addEventListener('submit', (event) => {
+  event.preventDefault();
+
+  // Get the selected file from the file input
+  const fileInput = document.querySelector('#fileInput');
+  const file = fileInput.files[0];
+
+  // Read the file as text
+  const reader = new FileReader();
+  reader.readAsText(file);
+
+  // When the file is done loading, generate the tables
+  reader.addEventListener('load', () => {
+    // Parse the CSV data into an array of objects
+    const data = d3.csvParse(reader.result);
+
+    // Group the data by activity type
+    const grouped = d3.group(data, d => d['Activity type']);
+
+    // Generate an HTML table for each activity type
+    const tables = [];
+    grouped.forEach((group, activityType) => {
+      // Create a new HTML table for this activity type
+      let tableHtml = `<h2>${activityType}</h2><table>`;
+      tableHtml += '<tr><th>Facility</th>';
+
+      // Get the start and end dates for this group
+      const startDates = group.map(d => new Date(d['Gap start']));
+      const endDates = group.map(d => new Date(d['Gap end']));
+      const startDate = d3.min(startDates);
+      const endDate = d3.max(endDates);
+
+      // Generate a list of dates from startDate to endDate
+      const dates = d3.timeDay.range(startDate, endDate);
+
+      // Add the date columns to the table header
+      dates.forEach(date => {
+        tableHtml += `<th>${d3.timeFormat('%m<br>%d')(date)}</th>`;
+      });
+
+      tableHtml += '</tr>';
+
+      // Iterate over each facility in the group
+	const facilities = new Set(group.map(d => d['Facility']))
+      facilities.forEach(facility => {
+        tableHtml += `<tr><td>${facility}</td>`;
+
+        // Iterate over each date in the group
+        dates.forEach(date => {
+          const isGapDay = group.some(d => d['Facility'] === facility &&
+                                            new Date(d['Gap start']) <= date &&
+                                            new Date(d['Gap end']) >= date);
+          if (isGapDay) {
+            tableHtml += '<td class="gap"></td>';
+          } else {
+            tableHtml += '<td class="not-a-gap"></td>';
+          }
+        });
+
+        tableHtml += '</tr>';
+      });
+
+      tableHtml += '</table>';
+      tables.push(tableHtml);
+    });
+
+    // Add the HTML tables to the tables div
+    tablesDiv.innerHTML = tables.join('');
+  });
+});
+</script>
+</body>
+</html>
+
